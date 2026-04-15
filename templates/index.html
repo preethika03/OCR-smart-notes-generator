@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OCR Smart Notes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Background decoration ─────────────────────────── -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+
+  <div class="app-wrapper">
+
+    <!-- ── Header ─────────────────────────────────────── -->
+    <header class="site-header">
+      <div class="logo">
+        <span class="logo-icon">✦</span>
+        <span class="logo-text">Smart<em>Notes</em></span>
+      </div>
+      <p class="tagline">Upload an image → extract text → get an AI summary</p>
+    </header>
+
+    <!-- ── Upload Card ────────────────────────────────── -->
+    <section class="card upload-card" id="uploadCard">
+      <h2 class="card-title">Upload Image</h2>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*" hidden />
+        <div class="drop-content" id="dropContent">
+          <div class="drop-icon">🖼️</div>
+          <p class="drop-primary">Drag &amp; drop or <button class="link-btn" onclick="document.getElementById('fileInput').click()">browse</button></p>
+          <p class="drop-sub">JPG, PNG, BMP, TIFF — up to 16 MB</p>
+        </div>
+        <!-- Preview replaces drop-content -->
+        <img id="imagePreview" class="image-preview hidden" alt="Preview" />
+      </div>
+
+      <!-- Options row -->
+      <div class="options-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="bulletToggle" />
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+          Bullet-point summary
+        </label>
+        <button class="btn-ghost" id="clearBtn" onclick="clearAll()">Clear</button>
+      </div>
+
+      <button class="btn-primary" id="processBtn" onclick="processImage()" disabled>
+        <span class="btn-label">Extract &amp; Summarize</span>
+        <span class="btn-icon">→</span>
+      </button>
+    </section>
+
+    <!-- ── Loading ────────────────────────────────────── -->
+    <div class="loader-wrap hidden" id="loaderWrap">
+      <div class="loader-ring"></div>
+      <p class="loader-text" id="loaderText">Preprocessing image…</p>
+    </div>
+
+    <!-- ── Results ────────────────────────────────────── -->
+    <div id="resultsArea" class="hidden">
+
+      <!-- Extracted text card -->
+      <section class="card result-card" id="textCard">
+        <div class="card-header">
+          <h2 class="card-title">Extracted Text</h2>
+          <button class="copy-btn" onclick="copyText('extractedText')" title="Copy">
+            <span>Copy</span> 📋
+          </button>
+        </div>
+        <pre id="extractedText" class="result-pre"></pre>
+      </section>
+
+      <!-- Summary card -->
+      <section class="card result-card summary-card" id="summaryCard">
+        <div class="card-header">
+          <h2 class="card-title">AI Summary</h2>
+          <button class="copy-btn" onclick="copyText('summaryText')" title="Copy">
+            <span>Copy</span> 📋
+          </button>
+        </div>
+        <div id="summaryText" class="summary-body"></div>
+
+        <button class="btn-primary download-btn" onclick="downloadPDF()">
+          <span class="btn-label">Download as PDF</span>
+          <span class="btn-icon">⬇</span>
+        </button>
+      </section>
+
+    </div>
+
+    <!-- ── Error toast ────────────────────────────────── -->
+    <div class="toast hidden" id="toast"></div>
+
+    <footer class="site-footer">
+      Built with Flask · pytesseract · DistilBART · OpenCV
+    </footer>
+
+  </div><!-- /app-wrapper -->
+
+  <script>
+    // ── State ─────────────────────────────────────────────
+    let selectedFile = null;
+
+    // ── Drop-zone setup ───────────────────────────────────
+    const dropZone   = document.getElementById('dropZone');
+    const fileInput  = document.getElementById('fileInput');
+    const processBtn = document.getElementById('processBtn');
+
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    function handleFile(file) {
+      selectedFile = file;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const preview = document.getElementById('imagePreview');
+        const content = document.getElementById('dropContent');
+        preview.src = ev.target.result;
+        preview.classList.remove('hidden');
+        content.classList.add('hidden');
+      };
+      reader.readAsDataURL(file);
+      processBtn.disabled = false;
+    }
+
+    function clearAll() {
+      selectedFile = null;
+      fileInput.value = '';
+      document.getElementById('imagePreview').classList.add('hidden');
+      document.getElementById('dropContent').classList.remove('hidden');
+      document.getElementById('imagePreview').src = '';
+      document.getElementById('resultsArea').classList.add('hidden');
+      processBtn.disabled = true;
+    }
+
+    // ── Loader messages cycling ───────────────────────────
+    const loaderMessages = [
+      'Preprocessing image…',
+      'Running OCR…',
+      'Cleaning text…',
+      'Generating AI summary…',
+      'Almost done…'
+    ];
+    let loaderInterval;
+
+    function startLoader() {
+      const wrap = document.getElementById('loaderWrap');
+      const txt  = document.getElementById('loaderText');
+      wrap.classList.remove('hidden');
+      let i = 0;
+      txt.textContent = loaderMessages[0];
+      loaderInterval = setInterval(() => {
+        i = (i + 1) % loaderMessages.length;
+        txt.textContent = loaderMessages[i];
+      }, 2200);
+    }
+
+    function stopLoader() {
+      clearInterval(loaderInterval);
+      document.getElementById('loaderWrap').classList.add('hidden');
+    }
+
+    // ── Process ───────────────────────────────────────────
+    async function processImage() {
+      if (!selectedFile) return;
+
+      document.getElementById('resultsArea').classList.add('hidden');
+      startLoader();
+      processBtn.disabled = true;
+
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      formData.append('bullet_points', document.getElementById('bulletToggle').checked);
+
+      try {
+        const res  = await fetch('/process', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        stopLoader();
+        processBtn.disabled = false;
+
+        if (!res.ok || data.error) {
+          showToast('⚠ ' + (data.error || 'Something went wrong'));
+          return;
+        }
+
+        // Populate results
+        document.getElementById('extractedText').textContent = data.extracted_text;
+
+        const summaryEl = document.getElementById('summaryText');
+        // Render bullet points as <li> if needed
+        if (data.summary.includes('\n•') || data.summary.startsWith('•')) {
+          const items = data.summary.split('\n').filter(s => s.trim());
+          summaryEl.innerHTML = '<ul>' + items.map(i => `<li>${i.replace(/^•\s*/, '')}</li>`).join('') + '</ul>';
+        } else {
+          summaryEl.textContent = data.summary;
+        }
+
+        document.getElementById('resultsArea').classList.remove('hidden');
+        document.getElementById('textCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (err) {
+        stopLoader();
+        processBtn.disabled = false;
+        showToast('⚠ Network error — is the server running?');
+      }
+    }
+
+    // ── Download PDF ──────────────────────────────────────
+    async function downloadPDF() {
+      const text    = document.getElementById('extractedText').textContent;
+      const summary = document.getElementById('summaryText').textContent;
+
+      const res = await fetch('/download-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extracted_text: text, summary })
+      });
+
+      if (!res.ok) { showToast('PDF generation failed'); return; }
+
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'smart_notes.pdf'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ── Copy to clipboard ─────────────────────────────────
+    function copyText(elId) {
+      const el   = document.getElementById(elId);
+      const text = el.textContent || el.innerText;
+      navigator.clipboard.writeText(text).then(() => showToast('✓ Copied to clipboard!'));
+    }
+
+    // ── Toast ─────────────────────────────────────────────
+    let toastTimer;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.add('hidden'), 3200);
+    }
+  </script>
+</body>
+</html>
