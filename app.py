@@ -10,7 +10,6 @@ import numpy as np
 import requests
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
-from PIL import Image
 import io
 import base64
 from fpdf import FPDF
@@ -31,36 +30,47 @@ def allowed_file(filename):
 
 def preprocess_image(image_path):
     img = cv2.imread(image_path)
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    denoised = cv2.fastNlMeansDenoising(gray, h=10)
+    # Improve contrast
+    gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=0)
 
-    thresh = cv2.adaptiveThreshold(
-        denoised, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 11, 2
-    )
+    # Threshold
+    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
 
     processed_path = image_path.replace('.', '_processed.')
     cv2.imwrite(processed_path, thresh)
+
     return processed_path
 
 
-# ✅ NEW OCR FUNCTION (API BASED)
+# 🧠 HANDWRITING OCR (HuggingFace)
 def extract_text(image_path):
-    with open(image_path, 'rb') as f:
-        response = requests.post(
-            'https://api.ocr.space/parse/image',
-            files={'filename': f},
-            data={'apikey': 'helloworld'}  # free key
-        )
+    API_URL = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten"
 
-    result = response.json()
+
+headers = {
+    "Authorization": f"Bearer {os.getenv('HF_TOKEN')}"
+}
+
+    with open(image_path, "rb") as f:
+        response = requests.post(API_URL, headers=headers, data=f.read(), timeout=60)
 
     try:
-        return result['ParsedResults'][0]['ParsedText']
-    except:
-        return ""
+        data = response.json()
+
+        if isinstance(data, list) and "generated_text" in data[0]:
+            return data[0]["generated_text"]
+
+        elif "error" in data:
+            return f"Error: {data['error']}"
+
+        else:
+            return ""
+
+    except Exception as e:
+        return str(e)
 
 
 def clean_text(raw_text):
@@ -74,7 +84,6 @@ def clean_text(raw_text):
 
     text = ' '.join(cleaned_lines)
     text = re.sub(r' +', ' ', text)
-    text = text.replace('|', 'I').replace('`', "'")
 
     return text.strip()
 
@@ -137,6 +146,7 @@ def process():
         summary = summarize_text(clean, bullet_points=bullet)
         processed_b64 = image_to_base64(processed_path)
 
+        # cleanup
         for p in [save_path, processed_path]:
             try:
                 os.remove(p)
