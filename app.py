@@ -15,6 +15,9 @@ import io
 import base64
 from fpdf import FPDF
 
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
+
 # ── App Setup ────────────────────────────────────────────────────────────────
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max upload
@@ -24,22 +27,6 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'bmp', 'tiff'}
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # ── Lazy-load the summarizer (avoids slow startup) ────────────────────────────
-_summarizer = None
-
-def get_summarizer():
-    global _summarizer
-    if _summarizer is None:
-        from transformers import pipeline
-        # facebook/bart-large-cnn is reliable; fall back to sshleifer/distilbart-cnn-12-6
-        try:
-            _summarizer = pipeline(
-                "summarization",
-                model="sshleifer/distilbart-cnn-12-6",
-                device=-1          # CPU
-            )
-        except Exception:
-            _summarizer = pipeline("summarization", device=-1)
-    return _summarizer
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -97,34 +84,17 @@ def clean_text(raw_text):
 
 
 def summarize_text(text, bullet_points=False):
-    """Summarize text using DistilBART; fall back to simple extraction."""
+    """Simple fallback summary (no AI, deployment safe)"""
+
     if len(text.split()) < 30:
-        return text  # Too short to meaningfully summarize
+        return text
 
-    try:
-        summarizer = get_summarizer()
-        # BART handles up to ~1024 tokens; trim if needed
-        words = text.split()
-        if len(words) > 800:
-            text = ' '.join(words[:800])
-
-        result = summarizer(
-            text,
-            max_length=150,
-            min_length=40,
-            do_sample=False
-        )
-        summary = result[0]['summary_text'].strip()
-
-    except Exception as e:
-        # Graceful fallback: return first 3 sentences
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        summary = ' '.join(sentences[:3])
+    # Take first 3 sentences
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    summary = ' '.join(sentences[:3])
 
     if bullet_points:
-        # Split on sentence boundaries → bullet list
-        sentences = re.split(r'(?<=[.!?])\s+', summary)
-        summary = '\n'.join(f'• {s.strip()}' for s in sentences if s.strip())
+        summary = '\n'.join(f'• {s.strip()}' for s in sentences[:3] if s.strip())
 
     return summary
 
@@ -248,5 +218,5 @@ def download_pdf():
     )
 
 
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
