@@ -45,41 +45,40 @@ def preprocess_image(image_path):
     return processed_path
 
 
-# 🧠 HANDWRITING OCR (HuggingFace)
+# 🧠 HYBRID OCR FUNCTION
 def extract_text(image_path):
+
     # 1️⃣ Try HuggingFace (handwriting)
-    hf_url = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten"
-    headers = {
-        "Authorization": f"Bearer {os.getenv('HF_TOKEN')}"
-    }
-
-    with open(image_path, "rb") as f:
-        hf_response = requests.post(hf_url, headers=headers, data=f.read())
-
     try:
+        hf_url = "https://api-inference.huggingface.co/models/microsoft/trocr-base-handwritten"
+        headers = {
+            "Authorization": f"Bearer {os.getenv('HF_TOKEN')}"
+        }
+
+        with open(image_path, "rb") as f:
+            hf_response = requests.post(hf_url, headers=headers, data=f.read(), timeout=60)
+
         hf_data = hf_response.json()
 
         if isinstance(hf_data, list) and "generated_text" in hf_data[0]:
             return hf_data[0]["generated_text"]
 
-    except:
-        pass
+    except Exception:
+        pass  # fallback if HF fails
 
-    # 2️⃣ Fallback to OCR.space
-    with open(image_path, 'rb') as f:
-        response = requests.post(
-            'https://api.ocr.space/parse/image',
-            files={'filename': f},
-            data={'apikey': 'helloworld'}
-        )
-
+    # 2️⃣ Fallback → OCR.space (printed text)
     try:
-        return response.json()['ParsedResults'][0]['ParsedText']
-    except:
-        return ""
+        with open(image_path, 'rb') as f:
+            response = requests.post(
+                'https://api.ocr.space/parse/image',
+                files={'filename': f},
+                data={'apikey': 'helloworld'}
+            )
 
-    except Exception as e:
-        return str(e)
+        return response.json()['ParsedResults'][0]['ParsedText']
+
+    except Exception:
+        return ""
 
 
 def clean_text(raw_text):
