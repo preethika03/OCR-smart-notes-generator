@@ -1,128 +1,132 @@
-# OCR Smart Notes Generator
+# 🧠 OCR Smart Notes Generator
 
-A web app that extracts text from images using OCR and generates an AI summary.
+An intelligent web application that extracts text from images (printed + handwritten) and generates concise AI-powered summaries.
 
-**Stack:** Flask · pytesseract · OpenCV · DistilBART (HuggingFace) · fpdf2
-
----
-
-## Project Structure
-
-```
-ocr-notes-app/
-├── app.py                  ← Flask backend
-├── requirements.txt
-├── uploads/                ← Temp storage (auto-created)
-├── templates/
-│   └── index.html          ← Single-page UI
-└── static/
-    └── style.css
-```
+🔗 **Live Demo:** https://ocr-smart-notes-generator-3.onrender.com
 
 ---
 
-## 1 · Install Tesseract OCR (system dependency)
+## 🚀 Features
 
-Tesseract must be installed **before** the Python packages.
+* 📷 Upload image (JPG, PNG, etc.)
+* ✍️ Extract text from:
 
-### macOS
-```bash
-brew install tesseract
-```
-
-### Ubuntu / Debian
-```bash
-sudo apt update && sudo apt install -y tesseract-ocr
-```
-
-### Windows
-1. Download the installer from:
-   https://github.com/UB-Mannheim/tesseract/wiki
-2. Run it (default path: `C:\Program Files\Tesseract-OCR\`)
-3. Add that path to your **System PATH** environment variable
-4. In `app.py`, add this line right after the imports if auto-detection fails:
-   ```python
-   pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-   ```
-
-Verify installation:
-```bash
-tesseract --version
-```
+  * Printed text (OCR)
+  * Handwritten text (AI-based recognition)
+* 🧠 Generate smart summaries
+* 📄 Download results as PDF
+* 🔘 Optional bullet-point summaries
+* ⚡ Clean and user-friendly interface
 
 ---
 
-## 2 · Set up a Python virtual environment
+## 🛠️ Tech Stack
 
-```bash
-cd ocr-notes-app
-python -m venv venv
+* **Backend:** Flask (Python)
+* **Image Processing:** OpenCV
+* **OCR Engines:**
 
-# macOS / Linux
-source venv/bin/activate
-
-# Windows
-venv\Scripts\activate
-```
+  * OCR.space API (Printed text)
+  * Hugging Face (TrOCR model for handwritten text)
+* **Frontend:** HTML, CSS
+* **PDF Generation:** FPDF
+* **Deployment:** Render
 
 ---
 
-## 3 · Install Python dependencies
+## ⚙️ How It Works
+
+1. User uploads an image
+2. Image is preprocessed (grayscale + denoise)
+3. Text extraction pipeline:
+
+   * Handwritten → Hugging Face TrOCR model
+   * Printed → OCR.space API
+4. Extracted text is cleaned
+5. AI summary is generated
+6. Results displayed + optional PDF download
+
+---
+
+## 📦 Installation (Local Setup)
 
 ```bash
+git clone https://github.com/preethika03/OCR-smart-notes-generator.git
+cd OCR-smart-notes-generator
+
 pip install -r requirements.txt
 ```
 
-> **Tip — CPU-only PyTorch (smaller download):**
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cpu
-> ```
-> Then run `pip install -r requirements.txt` afterwards.
-
-The first run will download the DistilBART model (~500 MB) from HuggingFace
-and cache it locally. Subsequent runs are fast.
-
----
-
-## 4 · Run the app
+### ▶️ Run the app
 
 ```bash
 python app.py
 ```
 
-Open your browser at **http://localhost:5000**
+Open in browser:
+
+```
+http://127.0.0.1:5000
+```
 
 ---
 
-## Usage
+## 🔐 Environment Variables
 
-1. Drag & drop (or click to browse) a JPG/PNG image
-2. Toggle **Bullet-point summary** if you want a list format
-3. Click **Extract & Summarize**
-4. Wait ~10–30 s (first run downloads the model; later runs are faster)
-5. View the extracted text and AI summary
-6. Click **Copy** on either card, or **Download as PDF**
+Create a `.env` or set environment variables:
 
----
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `TesseractNotFoundError` | Check Tesseract is installed and on PATH |
-| Model download hangs | Check internet connection; ~500 MB needed once |
-| Blurry/noisy images produce bad OCR | Use higher-resolution scans |
-| `CUDA not found` warning | Normal on CPU — the model runs on CPU by default |
-| Port 5000 in use (macOS) | `python app.py` uses port 5000; disable AirPlay Receiver in System Settings |
+```
+HF_TOKEN=your_huggingface_token_here
+```
 
 ---
 
-## Optional: change the summarization model
+## 📁 Project Structure
 
-In `app.py` → `get_summarizer()`, swap the model name:
+```
+OCR-NOTES-APP/
+│── static/
+│   └── style.css
+│── templates/
+│   └── index.html
+│── uploads/
+│── app.py
+│── requirements.txt
+│── README.md
+```
 
-| Model | Size | Notes |
-|---|---|---|
-| `sshleifer/distilbart-cnn-12-6` | ~500 MB | Default, fast |
-| `facebook/bart-large-cnn` | ~1.6 GB | Higher quality |
-| `philschmid/distilbart-cnn-12-6-samsum` | ~500 MB | Better for conversations |
+---
+
+## ⚠️ Limitations
+
+* Handwritten OCR may not be 100% accurate (depends on image quality)
+* Complex cursive writing may produce imperfect results
+* Free APIs may have rate limits
+
+---
+
+## 💡 Future Improvements
+
+* Better handwriting recognition models
+* Multi-language support
+* Note organization & saving system
+* Mobile optimization
+
+---
+
+## 🙌 Acknowledgements
+
+* Hugging Face 🤗
+* OCR.space API
+* OpenCV
+
+---
+
+## 👩‍💻 Author
+
+**Preethika**
+IT Engineering Student
+
+---
+
+⭐ If you like this project, give it a star!
